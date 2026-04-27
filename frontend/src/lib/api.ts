@@ -1,15 +1,19 @@
 const API_URL = '/api';
 
+type ApiGetOptions = {
+  responseType?: 'json' | 'text' | 'blob';
+};
+
 export const api = {
   
-async get(endpoint: string) {
+async get(endpoint: string, options?: ApiGetOptions) {
     const token = localStorage.getItem('token');
     const response = await fetch(`${API_URL}${endpoint}`, {
       headers: {
         'Authorization': `Bearer ${token}`,
       },
     });
-    return this.handleResponse(response);
+    return this.handleResponse(response, options);
   },
 
   async post(endpoint: string, data: any) {
@@ -70,7 +74,15 @@ async get(endpoint: string) {
     return this.handleResponse(response);
   },
 
-  async handleResponse(response: Response) {
+  async handleResponse(response: Response, options?: ApiGetOptions) {
+    if (options?.responseType === 'blob') {
+      if (!response.ok) {
+        const message = await response.text().catch(() => response.statusText);
+        throw new Error(message || response.statusText || 'API error');
+      }
+      return await response.blob();
+    }
+
     const contentType = response.headers.get('content-type');
     let data;
     

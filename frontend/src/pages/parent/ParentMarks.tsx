@@ -37,13 +37,14 @@ export function ParentMarks() {
   const handleDownload = async () => {
     try {
       toast.info('Generating report card...');
-      const response = await api.get('/parent/download-report', { responseType: 'blob' });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const blob = await api.get('/parent/download-report', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', 'report-card.pdf');
       document.body.appendChild(link);
       link.click();
+      window.URL.revokeObjectURL(url);
       toast.success('Report card downloaded');
     } catch (error) {
       toast.error('Failed to download report');

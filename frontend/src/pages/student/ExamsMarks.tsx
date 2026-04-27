@@ -14,7 +14,7 @@ export function ExamsMarks() {
     const fetchMarks = async () => {
       try {
         const res = await api.get('/student/marks');
-        const mapped = res.marks.map((m: any) => ({
+        const mapped = (res.data?.marks || []).map((m: any) => ({
           id: m._id,
           exam: m.examName,
           subject: m.subject,

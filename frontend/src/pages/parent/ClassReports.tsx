@@ -28,13 +28,14 @@ export function ClassReports() {
   const handleDownload = async () => {
     try {
       toast.info('Generating report...');
-      const response = await api.get('/parent/download-report', { responseType: 'blob' });
-      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const blob = await api.get('/parent/download-report', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.setAttribute('download', 'child-report.pdf');
       document.body.appendChild(link);
       link.click();
+      window.URL.revokeObjectURL(url);
       toast.success('Report downloaded successfully');
     } catch (error) {
       toast.error('Failed to download report');
