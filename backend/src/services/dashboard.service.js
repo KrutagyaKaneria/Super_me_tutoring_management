@@ -3,6 +3,8 @@ const Session = require('../models/session.model');
 const Tutor = require('../models/tutor.model');
 const Student = require('../models/student.model');
 const Exam = require('../models/exam.model');
+const Parent = require('../models/parent.model');
+const AppError = require('../utils/AppError');
 const parentDashboardService = require('./parent.dashboard.service');
 
 exports.getAdminDashboard = async () => {
@@ -155,50 +157,76 @@ exports.getStudentDashboard = async (studentUserId) => {
   };
 };
 
-// Reuse existing logic for Parent
+// Parent Dashboard - auto-creates profile if missing (handles seeded users)
 exports.getParentDashboard = async (parentUserId) => {
-  const parent = await Parent.findOne({ user: parentUserId }).populate('children');
-  if (!parent) throw new AppError('Parent profile not found', 404);
-
-  const studentUserIds = parent.children.map(child => child.user);
-
-  // 1. Combine metrics for all children
-  const sessionsCompleted = await Session.countDocuments({
-    studentId: { $in: studentUserIds },
-    status: { $in: ['completed', 'approved'] }
+  // Upsert: create parent profile if it doesn't exist yet (handles seed-created users)
+  let parent = await Parent.findOneAndUpdate(
+    { user: parentUserId },
+    { $setOnInsert: { user: parentUserId, children: [] } },
+    { upsert: true, new: true }
+  ).populate({
+    path: 'children',
+    populate: { path: 'user', select: 'name email' }
   });
 
-  const allCompletedSessions = await Session.find({
-    studentId: { $in: studentUserIds },
-    status: { $in: ['completed', 'approved'] }
-  }).populate('studentId', 'name');
+  // children may be empty for a fresh profile - that's fine, return zeros
+  const childrenProfiles = parent.children || [];
 
-  const hoursCompleted = allCompletedSessions.reduce((acc, s) => acc + (s.durationInHours || 0), 0);
+  // student User IDs for querying sessions/marks
+  const studentUserIds = childrenProfiles
+    .filter(child => child && child.user)
+    .map(child => child.user._id || child.user);
 
-  // 2. Combine financial metrics
-  const pendingFees = parent.children.reduce((acc, child) => acc + (child.pendingFees || 0), 0);
-  const totalFeesPaid = parent.children.reduce((acc, child) => acc + (child.totalFeesPaid || 0), 0);
+  // 1. Session metrics
+  const sessionsCompleted = studentUserIds.length
+    ? await Session.countDocuments({
+        studentId: { $in: studentUserIds },
+        status: { $in: ['completed', 'approved'] }
+      })
+    : 0;
 
-  // 3. Fetch Recent Marks for all children
-  const recentMarks = await Exam.find({ studentId: { $in: studentUserIds } })
-    .sort({ date: -1 })
-    .limit(5)
-    .populate('studentId', 'name');
+  const allCompletedSessions = studentUserIds.length
+    ? await Session.find({
+        studentId: { $in: studentUserIds },
+        status: { $in: ['completed', 'approved'] }
+      }).populate('studentId', 'name')
+    : [];
 
-  // 4. Build Fee Ledger (Approved sessions are essentially invoices)
+  const hoursCompleted = allCompletedSessions.reduce(
+    (acc, s) => acc + (s.durationInHours || 0), 0
+  );
+
+  // 2. Financial metrics — query Student profiles directly (children are Student docs)
+  const studentProfileIds = childrenProfiles.map(c => c._id);
+  const studentProfiles = studentProfileIds.length
+    ? await Student.find({ _id: { $in: studentProfileIds } })
+    : [];
+
+  const pendingFees = studentProfiles.reduce((acc, s) => acc + (s.pendingFees || 0), 0);
+  const totalFeesPaid = studentProfiles.reduce((acc, s) => acc + (s.totalFeesPaid || 0), 0);
+
+  // 3. Recent Marks
+  const recentMarks = studentUserIds.length
+    ? await Exam.find({ studentId: { $in: studentUserIds } })
+        .sort({ date: -1 })
+        .limit(5)
+        .populate('studentId', 'name')
+    : [];
+
+  // 4. Fee Ledger from approved sessions
   const feeLedger = allCompletedSessions
     .filter(s => s.status === 'approved')
-    .sort((a, b) => new Date(b.scheduledDate) - new Date(a.scheduledDate))
-    .limit(10)
+    .sort((a, b) => new Date(b.scheduledDate).getTime() - new Date(a.scheduledDate).getTime())
+    .slice(0, 10)
     .map(s => ({
       date: s.scheduledDate,
       studentName: s.studentId?.name || 'Child',
       description: `Tutoring Session: ${s.subject}`,
-      amount: s.durationInHours * 250, // Simplified: ideally we store actual amount in session doc
+      amount: (s.durationInHours || 0) * 250,
     }));
 
   return {
-    children: parent.children,
+    children: childrenProfiles,
     sessionsCompleted,
     hoursCompleted,
     pendingFees,
@@ -207,3 +235,4 @@ exports.getParentDashboard = async (parentUserId) => {
     feeLedger
   };
 };
+

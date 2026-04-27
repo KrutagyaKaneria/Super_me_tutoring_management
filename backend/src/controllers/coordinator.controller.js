@@ -104,3 +104,25 @@ exports.getAllStudents = catchAsync(async (req, res, next) => {
     new ApiResponse(200, { students }, 'All students retrieved successfully')
   );
 });
+
+exports.getAllParents = catchAsync(async (req, res, next) => {
+  const parents = await coordinatorService.getAllParents();
+
+  res.status(200).json(
+    new ApiResponse(200, { parents }, 'All parents retrieved successfully')
+  );
+});
+
+exports.linkParent = catchAsync(async (req, res, next) => {
+  const { parentId, studentId } = req.body;
+
+  if (!parentId || !studentId) {
+    return next(new (require('../utils/AppError'))('Please provide both parentId and studentId', 400));
+  }
+
+  const result = await coordinatorService.linkParentToStudent(parentId, studentId);
+
+  res.status(200).json(
+    new ApiResponse(200, { parent: result }, 'Student linked to parent successfully')
+  );
+});

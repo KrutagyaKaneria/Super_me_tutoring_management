@@ -11,14 +11,16 @@ import { Wallet, GraduationCap } from 'lucide-react';
 export function ParentOverview() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   useEffect(() => {
     const fetchParentData = async () => {
       try {
         const response = await api.get('/parent/dashboard');
         setData(response.data);
-      } catch (error) {
-        toast.error('Failed to load parent dashboard');
+      } catch (err: any) {
+        setError(true);
+        toast.error(err?.response?.data?.message || 'Failed to load parent dashboard');
       } finally {
         setLoading(false);
       }
@@ -26,7 +28,13 @@ export function ParentOverview() {
     fetchParentData();
   }, []);
 
-  if (loading || !data) return <div className="p-8 text-center text-slate-500">Loading parent dashboard...</div>;
+  if (loading) return <div className="p-8 text-center text-slate-500">Loading parent dashboard...</div>;
+  if (error || !data) return (
+    <div className="p-8 text-center space-y-2">
+      <p className="text-red-500 font-semibold">Could not load dashboard.</p>
+      <p className="text-slate-500 text-sm">Please refresh the page or contact support.</p>
+    </div>
+  );
 
   const stats = [
     { label: 'Classes Completed', value: data.sessionsCompleted || 0 },
@@ -46,6 +54,12 @@ export function ParentOverview() {
           <StatsCard key={s.label} {...s} />
         ))}
       </div>
+
+      {(data.children || []).length === 0 && (
+        <NotificationBanner variant="info">
+          👶 No students are linked to your account yet. Contact your coordinator to assign your child.
+        </NotificationBanner>
+      )}
 
       {data.pendingFees > 0 && (
         <NotificationBanner variant="warning">

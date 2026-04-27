@@ -1,21 +1,36 @@
 const Parent = require('../models/parent.model');
+const Student = require('../models/student.model');
 const Session = require('../models/session.model');
 const Exam = require('../models/exam.model');
 
-const getParentChildrenProfiles = async (parentUserId) => {
-  const parentProfile = await Parent.findOne({ user: parentUserId }).populate({
+// Helper: get or auto-create parent profile with full child population
+const getParentWithChildren = async (parentUserId) => {
+  const parent = await Parent.findOneAndUpdate(
+    { user: parentUserId },
+    { $setOnInsert: { user: parentUserId, children: [] } },
+    { upsert: true, new: true }
+  ).populate({
     path: 'children',
     populate: { path: 'user', select: 'name email' }
   });
-  if (!parentProfile || !parentProfile.children) return [];
-  return parentProfile.children;
+  return parent;
 };
 
 exports.getChildProgress = async (parentUserId) => {
-  const childrenProfiles = await getParentChildrenProfiles(parentUserId);
-  if (childrenProfiles.length === 0) return { message: 'No children linked to this parent profile.' };
+  const parent = await getParentWithChildren(parentUserId);
+  const childrenProfiles = parent.children || [];
 
-  const studentUserIds = childrenProfiles.map(child => child.user._id);
+  if (childrenProfiles.length === 0) {
+    return {
+      attendanceSummary: { totalScheduled: 0, totalCompletedOrApproved: 0, totalCancelled: 0 },
+      sessionHistory: [],
+      marksSummary: []
+    };
+  }
+
+  const studentUserIds = childrenProfiles
+    .filter(child => child && child.user)
+    .map(child => child.user._id || child.user);
 
   const marks = await Exam.find({ studentId: { $in: studentUserIds } })
     .populate('studentId', 'name')
@@ -30,7 +45,6 @@ exports.getChildProgress = async (parentUserId) => {
     totalScheduled: sessions.filter(s => s.status === 'scheduled').length,
     totalCompletedOrApproved: sessions.filter(s => s.status === 'completed' || s.status === 'approved').length,
     totalCancelled: sessions.filter(s => s.status === 'cancelled').length,
-    totalPendingExecution: sessions.filter(s => s.status === 'pending').length,
   };
 
   return {
@@ -41,21 +55,28 @@ exports.getChildProgress = async (parentUserId) => {
 };
 
 exports.getFeeLedger = async (parentUserId) => {
-  const childrenProfiles = await getParentChildrenProfiles(parentUserId);
-  if (childrenProfiles.length === 0) return { message: 'No children linked to this parent profile.' };
-  
+  const parent = await getParentWithChildren(parentUserId);
+  const childrenProfiles = parent.children || [];
+
+  if (childrenProfiles.length === 0) {
+    return { totalFeesDue: 0, totalFeesPaid: 0, totalOutstandingBalance: 0, breakdown: [] };
+  }
+
+  // Query Student profiles directly for accurate fee data
+  const studentProfileIds = childrenProfiles.map(c => c._id);
+  const studentProfiles = await Student.find({ _id: { $in: studentProfileIds } }).populate('user', 'name email');
+
   let feesDue = 0;
   let feesPaid = 0;
-  
-  const childLedgers = childrenProfiles.map(child => {
-    feesDue += child.pendingFees || 0;
-    feesPaid += child.totalFeesPaid || 0;
-    
+
+  const childLedgers = studentProfiles.map(s => {
+    feesDue += s.pendingFees || 0;
+    feesPaid += s.totalFeesPaid || 0;
     return {
-      studentInfo: child.user,
-      pendingFees: child.pendingFees || 0,
-      totalFeesPaid: child.totalFeesPaid || 0,
-      outstandingBalance: child.pendingFees || 0
+      studentInfo: s.user,
+      pendingFees: s.pendingFees || 0,
+      totalFeesPaid: s.totalFeesPaid || 0,
+      outstandingBalance: s.pendingFees || 0
     };
   });
 
@@ -68,11 +89,9 @@ exports.getFeeLedger = async (parentUserId) => {
 };
 
 exports.getPayments = async (parentUserId) => {
-  // Currently tracks abstract balances logically identical to the ledger.
-  // In a future phase, a dedicated 'Payment' transaction model would be queried here.
-  const ledger = await this.getFeeLedger(parentUserId);
+  const ledger = await exports.getFeeLedger(parentUserId);
   return {
-    notice: 'Detailed transactional payment history will route here. Currently routing abstracted balances.',
+    notice: 'Detailed transactional payment history will be available in the next release.',
     ledgerData: ledger
   };
 };

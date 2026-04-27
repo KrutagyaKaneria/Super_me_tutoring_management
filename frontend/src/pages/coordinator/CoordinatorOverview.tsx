@@ -4,7 +4,7 @@ import { CardShell } from '@/components/CardShell';
 import { DataTable } from '@/components/DataTable';
 import { StatusBadge, getStatusVariant } from '@/components/StatusBadge';
 import { PageHeader } from '@/components/PageHeader';
-import { Plus, X, Loader2, UserPlus } from 'lucide-react';
+import { Plus, X, Loader2, UserPlus, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '@/lib/api';
 
@@ -15,13 +15,21 @@ export function CoordinatorOverview() {
   const [pendingClaims, setPendingClaims] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  // Assignment Dialog State
+  // Assign Tutor Dialog State
   const [showAssignDialog, setShowAssignDialog] = useState(false);
   const [allStudents, setAllStudents] = useState<any[]>([]);
   const [allTutors, setAllTutors] = useState<any[]>([]);
   const [selectedStudent, setSelectedStudent] = useState('');
   const [selectedTutor, setSelectedTutor] = useState('');
   const [assigning, setAssigning] = useState(false);
+
+  // Link Parent Dialog State
+  const [showLinkParentDialog, setShowLinkParentDialog] = useState(false);
+  const [allParents, setAllParents] = useState<any[]>([]);
+  const [linkStudents, setLinkStudents] = useState<any[]>([]);
+  const [selectedParent, setSelectedParent] = useState('');
+  const [selectedLinkStudent, setSelectedLinkStudent] = useState('');
+  const [linking, setLinking] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -80,6 +88,45 @@ export function CoordinatorOverview() {
     }
   };
 
+  // --- Link Parent ---
+  const openLinkParentDialog = async () => {
+    setShowLinkParentDialog(true);
+    try {
+      const [parentsRes, studentsRes] = await Promise.all([
+        api.get('/coordinator/parents'),
+        api.get('/coordinator/students')
+      ]);
+      setAllParents(parentsRes.data.parents || []);
+      setLinkStudents(studentsRes.data.students || []);
+    } catch (error) {
+      toast.error('Failed to load parents or students');
+    }
+  };
+
+  const handleLinkParent = async () => {
+    if (!selectedParent || !selectedLinkStudent) {
+      toast.error('Please select both a parent and a student');
+      return;
+    }
+
+    try {
+      setLinking(true);
+      await api.post('/coordinator/link-parent', {
+        parentId: selectedParent,
+        studentId: selectedLinkStudent
+      });
+      toast.success('Student linked to parent successfully!');
+      setShowLinkParentDialog(false);
+      setSelectedParent('');
+      setSelectedLinkStudent('');
+      fetchData();
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to link parent');
+    } finally {
+      setLinking(false);
+    }
+  };
+
   if (loading) return (
     <div className="flex items-center justify-center min-h-[400px]">
       <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
@@ -106,12 +153,20 @@ export function CoordinatorOverview() {
       <CardShell
         title="Student–Tutor Assignments"
         action={
-          <button
-            onClick={openAssignDialog}
-            className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors cursor-pointer"
-          >
-            <UserPlus className="w-4 h-4" /> Assign Tutor
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={openLinkParentDialog}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors cursor-pointer"
+            >
+              <Link2 className="w-4 h-4" /> Link Parent
+            </button>
+            <button
+              onClick={openAssignDialog}
+              className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 transition-colors cursor-pointer"
+            >
+              <UserPlus className="w-4 h-4" /> Assign Tutor
+            </button>
+          </div>
         }
       >
         <DataTable headers={['Student Name', 'Grade', 'Assigned Tutor', 'Status']}>
@@ -143,7 +198,7 @@ export function CoordinatorOverview() {
         </DataTable>
       </CardShell>
 
-      {/* Assignment Dialog */}
+      {/* Assign Tutor Dialog */}
       {showAssignDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setShowAssignDialog(false)}>
           <div
@@ -204,6 +259,80 @@ export function CoordinatorOverview() {
                 </button>
                 <button
                   onClick={() => setShowAssignDialog(false)}
+                  className="flex-1 bg-white text-slate-600 border border-slate-200 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Link Parent Dialog */}
+      {showLinkParentDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" onClick={() => setShowLinkParentDialog(false)}>
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in fade-in zoom-in duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-6 border-b border-emerald-100">
+              <div>
+                <h2 className="text-xl font-semibold text-slate-900">Link Parent to Student</h2>
+                <p className="text-xs text-slate-500 mt-1">Connect a parent account to their child so they can monitor progress and fees.</p>
+              </div>
+              <button
+                onClick={() => setShowLinkParentDialog(false)}
+                className="p-2 rounded-lg hover:bg-slate-100 transition-colors text-slate-400 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-5">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-slate-700">Select Parent</label>
+                <select
+                  value={selectedParent}
+                  onChange={(e) => setSelectedParent(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all"
+                >
+                  <option value="">-- Choose Parent --</option>
+                  {allParents.map(p => (
+                    <option key={p._id} value={p.user?._id}>
+                      {p.user?.name} ({p.user?.email}) — {p.children?.length || 0} child(ren)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-slate-700">Select Student (Child)</label>
+                <select
+                  value={selectedLinkStudent}
+                  onChange={(e) => setSelectedLinkStudent(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-400 transition-all"
+                >
+                  <option value="">-- Choose Student --</option>
+                  {linkStudents.map(s => (
+                    <option key={s._id} value={s.user?._id}>
+                      {s.user?.name} ({s.grade || 'No Grade'})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={handleLinkParent}
+                  disabled={linking}
+                  className="flex-1 bg-emerald-600 text-white px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-emerald-200"
+                >
+                  {linking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+                  Link Parent
+                </button>
+                <button
+                  onClick={() => setShowLinkParentDialog(false)}
                   className="flex-1 bg-white text-slate-600 border border-slate-200 px-4 py-2.5 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-all cursor-pointer"
                 >
                   Cancel

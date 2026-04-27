@@ -1,5 +1,6 @@
 const Tutor = require('../models/tutor.model');
 const Student = require('../models/student.model');
+const Parent = require('../models/parent.model');
 const User = require('../models/user.model');
 const Session = require('../models/session.model');
 const AppError = require('../utils/AppError');
@@ -152,4 +153,74 @@ exports.rejectSession = async (sessionId) => {
   await session.save();
 
   return session;
+};
+
+exports.getAllParents = async () => {
+  const parentUsers = await User.find({ role: 'parent' }).select('name email isActive');
+
+  const parents = await Promise.all(parentUsers.map(async (user) => {
+    let profile = await Parent.findOne({ user: user._id }).populate('user', 'name email isActive').populate({
+      path: 'children',
+      populate: { path: 'user', select: 'name' }
+    });
+    if (!profile) {
+      profile = await Parent.create({ user: user._id, children: [] });
+      profile = await profile.populate('user', 'name email isActive');
+    }
+    return profile;
+  }));
+
+  return parents;
+};
+
+exports.linkParentToStudent = async (parentUserId, studentUserId) => {
+  // 1. Validate parent user
+  const parentUser = await User.findById(parentUserId);
+  if (!parentUser || parentUser.role !== 'parent') {
+    throw new AppError('Valid parent user not found', 404);
+  }
+
+  // 2. Validate student user
+  const studentUser = await User.findById(studentUserId);
+  if (!studentUser || studentUser.role !== 'student') {
+    throw new AppError('Valid student user not found', 404);
+  }
+
+  // 3. Get or create parent profile
+  let parentProfile = await Parent.findOne({ user: parentUserId });
+  if (!parentProfile) {
+    parentProfile = await Parent.create({ user: parentUserId, children: [] });
+  }
+
+  // 4. Get or create student profile
+  let studentProfile = await Student.findOne({ user: studentUserId });
+  if (!studentProfile) {
+    studentProfile = await Student.create({ user: studentUserId });
+  }
+
+  // 5. Prevent duplicate linkage
+  const alreadyLinked = parentProfile.children.some(
+    childId => childId.toString() === studentProfile._id.toString()
+  );
+  if (alreadyLinked) {
+    throw new AppError('This student is already linked to this parent', 400);
+  }
+
+  // 6. Link: add student profile ID to parent's children array
+  parentProfile.children.push(studentProfile._id);
+  await parentProfile.save();
+
+  // 7. Also store parent reference on student (for reverse lookup)
+  studentProfile.parent = parentUserId;
+  await studentProfile.save();
+
+  // Return populated result
+  const result = await Parent.findById(parentProfile._id)
+    .populate('user', 'name email')
+    .populate({
+      path: 'children',
+      populate: { path: 'user', select: 'name email' }
+    });
+
+  return result;
 };

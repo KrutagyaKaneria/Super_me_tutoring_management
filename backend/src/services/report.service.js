@@ -26,31 +26,45 @@ const getFeeReport = async (parentProfile) => {
   return { breakdown, totalDue, totalPaid };
 };
 
-// Generates Consolidated Output for Parents
 exports.getParentConsolidatedReport = async (parentUserId) => {
-  const parentProfile = await Parent.findOne({ user: parentUserId }).populate({
+  const parentProfile = await Parent.findOneAndUpdate(
+    { user: parentUserId },
+    { $setOnInsert: { user: parentUserId, children: [] } },
+    { upsert: true, new: true }
+  ).populate({
     path: 'children',
     populate: { path: 'user', select: 'name email' }
   });
 
-  if (!parentProfile || !parentProfile.children) {
-    throw new AppError('Parent or children profile misconfigured.', 404);
-  }
+  const childrenProfiles = parentProfile.children || [];
+  const studentIds = childrenProfiles
+    .filter(c => c && c.user)
+    .map(c => c.user._id || c.user);
 
-  const studentIds = parentProfile.children.map(c => c.user._id);
+  const attendance = studentIds.length ? await getAttendanceReport(studentIds) : [];
+  const marks = studentIds.length ? await getMarksReport(studentIds) : [];
 
-  const attendance = await getAttendanceReport(studentIds);
-  const marks = await getMarksReport(studentIds);
-  const fees = await getFeeReport(parentProfile);
+  // Fee report from actual Student profiles
+  const Student = require('../models/student.model');
+  const studentProfileIds = childrenProfiles.map(c => c._id);
+  const studentProfiles = studentProfileIds.length
+    ? await Student.find({ _id: { $in: studentProfileIds } }).populate('user', 'name')
+    : [];
+
+  const fees = {
+    breakdown: studentProfiles.map(s => ({
+      studentId: s.user?.name || 'Unknown',
+      pendingFees: s.pendingFees || 0,
+      totalFeesPaid: s.totalFeesPaid || 0,
+    })),
+    totalDue: studentProfiles.reduce((acc, s) => acc + (s.pendingFees || 0), 0),
+    totalPaid: studentProfiles.reduce((acc, s) => acc + (s.totalFeesPaid || 0), 0),
+  };
 
   return {
     reportType: 'Consolidated Parent Report',
     generatedAt: new Date(),
-    summary: {
-      attendance,
-      marks,
-      fees
-    }
+    summary: { attendance, marks, fees }
   };
 };
 

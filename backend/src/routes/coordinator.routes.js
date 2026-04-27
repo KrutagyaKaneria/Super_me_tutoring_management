@@ -20,5 +20,7 @@ router.post('/add-marks', coordinatorController.addMarks);
 router.get('/marks', coordinatorController.getAllMarks);
 router.get('/sessions', coordinatorController.getAllSessions);
 router.get('/students', coordinatorController.getAllStudents);
+router.get('/parents', coordinatorController.getAllParents);
+router.post('/link-parent', coordinatorController.linkParent);
 
 module.exports = router;
