@@ -53,7 +53,22 @@ export function TutorDashboard() {
         <DataTable headers={['Time', 'Student', 'Subject', 'Grade', 'Link', 'Action']}>
           {todayClasses.map((cls) => {
             const state = getSessionState(cls._id);
-            const displayTime = new Date(cls.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            const scheduledTime = cls.scheduledStartTime || (typeof cls.startTime === 'string' ? cls.startTime : undefined);
+            const displayTime = scheduledTime && /^\d{1,2}:\d{2}$/.test(scheduledTime)
+              ? scheduledTime
+              : new Date(cls.scheduledDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            const normalizedBackendStatus = (cls.status === 'ongoing' || cls.status === 'pending')
+              ? 'in_progress'
+              : (cls.status === 'completed')
+                ? 'pending_approval'
+                : cls.status;
+
+            const effectiveStatus = state === 'in-progress'
+              ? 'in_progress'
+              : state === 'ended'
+                ? 'pending_approval'
+                : normalizedBackendStatus;
             
             return (
               <tr key={cls._id} className="hover:bg-slate-50/50 transition-colors">
@@ -62,12 +77,12 @@ export function TutorDashboard() {
                 <td className="py-3 px-3 text-sm">{cls.subject}</td>
                 <td className="py-3 px-3 text-sm">{cls.gradeBand}</td>
                 <td className="py-3 px-3">
-                  <span className="inline-flex items-center gap-1 text-xs text-indigo-600 truncate max-w-[120px]">
-                    <ExternalLink className="w-3 h-3 flex-shrink-0" /> {cls.meetLink}
+                  <span className="inline-flex items-center gap-1 text-xs text-indigo-600 truncate max-w-30">
+                    <ExternalLink className="w-3 h-3 shrink-0" /> {cls.meetingLink || cls.meetLink || '—'}
                   </span>
                 </td>
                 <td className="py-3 px-3">
-                  {state === 'idle' && (
+                  {effectiveStatus === 'scheduled' && (
                     <button
                       onClick={() => startSession(cls._id, cls.studentId?.name)}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors cursor-pointer"
@@ -75,7 +90,7 @@ export function TutorDashboard() {
                       <Play className="w-3 h-3" /> Start Session
                     </button>
                   )}
-                  {state === 'in-progress' && (
+                  {effectiveStatus === 'in_progress' && (
                     <button
                       onClick={() => endSession(cls._id, cls.studentId?.name)}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 transition-colors animate-pulse cursor-pointer"
@@ -83,7 +98,7 @@ export function TutorDashboard() {
                       <Square className="w-3 h-3" /> End Session
                     </button>
                   )}
-                  {state === 'ended' && (
+                  {['pending_approval', 'approved', 'rejected'].includes(effectiveStatus) && (
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
                       Submitted
                     </span>

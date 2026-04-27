@@ -60,11 +60,11 @@ export const mockStudents: Student[] = [
 
 // ── Coordinator assignment table ──────────────────
 export const mockAssignments: Session[] = [
-  { id: 'a1', date: '', tutor: 'Priya R.', student: 'Arjun M.', subject: 'Maths', grade: 8, status: 'completed', duration: '12' },
-  { id: 'a2', date: '', tutor: 'Rahul K.', student: 'Sneha T.', subject: 'Physics', grade: 10, status: 'completed', duration: '8' },
-  { id: 'a3', date: '', tutor: 'Meena S.', student: 'Fatima A.', subject: 'English', grade: 6, status: 'completed', duration: '15' },
+  { id: 'a1', date: '', tutor: 'Priya R.', student: 'Arjun M.', subject: 'Maths', grade: 8, status: 'pending_approval', duration: '12' },
+  { id: 'a2', date: '', tutor: 'Rahul K.', student: 'Sneha T.', subject: 'Physics', grade: 10, status: 'pending_approval', duration: '8' },
+  { id: 'a3', date: '', tutor: 'Meena S.', student: 'Fatima A.', subject: 'English', grade: 6, status: 'pending_approval', duration: '15' },
   { id: 'a4', date: '', tutor: 'Priya R.', student: 'Rohit P.', subject: 'Chemistry', grade: 9, status: 'cancelled', duration: '5' },
-  { id: 'a5', date: '', tutor: 'Anil J.', student: 'Divya N.', subject: 'Biology', grade: 12, status: 'completed', duration: '20' },
+  { id: 'a5', date: '', tutor: 'Anil J.', student: 'Divya N.', subject: 'Biology', grade: 12, status: 'pending_approval', duration: '20' },
 ];
 
 // ── Sessions ──────────────────────────────────────
@@ -75,21 +75,21 @@ export const mockUpcomingSessions: Session[] = [
 ];
 
 export const mockCompletedSessions: Session[] = [
-  { id: 'c1', date: 'Apr 20', tutor: 'Priya R.', student: 'Arjun M.', subject: 'Maths', duration: '1h 10m', status: 'completed' },
-  { id: 'c2', date: 'Apr 19', tutor: 'Meena S.', student: 'Fatima A.', subject: 'English', duration: '1h 05m', status: 'completed' },
+  { id: 'c1', date: 'Apr 20', tutor: 'Priya R.', student: 'Arjun M.', subject: 'Maths', duration: '1h 10m', status: 'pending_approval' },
+  { id: 'c2', date: 'Apr 19', tutor: 'Meena S.', student: 'Fatima A.', subject: 'English', duration: '1h 05m', status: 'pending_approval' },
 ];
 
 // ── Tutor's today's classes ──────────────────────
 export const mockTodayClasses: Session[] = [
-  { id: 't1', date: 'Today', time: '10:00 AM', tutor: 'You', student: 'Arjun M.', subject: 'Maths', grade: 8, meetLink: 'meet.google.com/abc', status: 'in-progress' },
+  { id: 't1', date: 'Today', time: '10:00 AM', tutor: 'You', student: 'Arjun M.', subject: 'Maths', grade: 8, meetLink: 'meet.google.com/abc', status: 'in_progress' },
   { id: 't2', date: 'Today', time: '11:30 AM', tutor: 'You', student: 'Rohit P.', subject: 'Chemistry', grade: 9, meetLink: 'meet.google.com/def', status: 'scheduled' },
 ];
 
 // ── Attendance Claims ─────────────────────────────
 export const mockAttendanceClaims: AttendanceClaim[] = [
-  { id: 'ac1', tutor: 'Priya R.', student: 'Arjun M.', date: 'Apr 21', startTime: '10:02 AM', endTime: '11:18 AM', claimedDuration: '1h 16m', status: 'pending' },
-  { id: 'ac2', tutor: 'Rahul K.', student: 'Sneha T.', date: 'Apr 21', startTime: '2:05 PM', endTime: '3:10 PM', claimedDuration: '1h 05m', status: 'pending' },
-  { id: 'ac3', tutor: 'Meena S.', student: 'Fatima A.', date: 'Apr 20', startTime: '9:00 AM', endTime: '10:30 AM', claimedDuration: '1h 30m', status: 'pending' },
+  { id: 'ac1', tutor: 'Priya R.', student: 'Arjun M.', date: 'Apr 21', startTime: '10:02 AM', endTime: '11:18 AM', claimedDuration: '1h 16m', status: 'pending_approval' },
+  { id: 'ac2', tutor: 'Rahul K.', student: 'Sneha T.', date: 'Apr 21', startTime: '2:05 PM', endTime: '3:10 PM', claimedDuration: '1h 05m', status: 'pending_approval' },
+  { id: 'ac3', tutor: 'Meena S.', student: 'Fatima A.', date: 'Apr 20', startTime: '9:00 AM', endTime: '10:30 AM', claimedDuration: '1h 30m', status: 'pending_approval' },
 ];
 
 // ── Marks ──────────────────────────────────────────
@@ -120,7 +120,7 @@ export const mockNotifications: Notification[] = [
 
 // ── Tutor past submissions ────────────────────────
 export const mockTutorSubmissions: Session[] = [
-  { id: 'ts1', date: 'Apr 20', student: 'Arjun M.', tutor: '', subject: '', duration: '1h 16m', status: 'pending' as SessionStatus | ApprovalStatus },
+  { id: 'ts1', date: 'Apr 20', student: 'Arjun M.', tutor: '', subject: '', duration: '1h 16m', status: 'pending_approval' as SessionStatus | ApprovalStatus },
   { id: 'ts2', date: 'Apr 19', student: 'Divya N.', tutor: '', subject: '', duration: '1h 30m', status: 'approved' as SessionStatus | ApprovalStatus },
   { id: 'ts3', date: 'Apr 18', student: 'Rohit P.', tutor: '', subject: '', duration: '0h 55m', status: 'rejected' as SessionStatus | ApprovalStatus },
 ];
@@ -149,10 +149,10 @@ export const mockStudentUpcoming: Session[] = [
 
 // ── Parent ────────────────────────────────────────
 export const mockParentSessionHistory: Session[] = [
-  { id: 'ps1', date: 'Apr 20', tutor: 'Priya R.', student: '', subject: 'Maths', duration: '1h 16m', status: 'completed' },
-  { id: 'ps2', date: 'Apr 18', tutor: 'Priya R.', student: '', subject: 'Chemistry', duration: '1h 00m', status: 'completed' },
-  { id: 'ps3', date: 'Apr 15', tutor: 'Priya R.', student: '', subject: 'Maths', duration: '1h 10m', status: 'completed' },
-  { id: 'ps4', date: 'Apr 12', tutor: 'Priya R.', student: '', subject: 'Chemistry', duration: '0h 55m', status: 'completed' },
+  { id: 'ps1', date: 'Apr 20', tutor: 'Priya R.', student: '', subject: 'Maths', duration: '1h 16m', status: 'pending_approval' },
+  { id: 'ps2', date: 'Apr 18', tutor: 'Priya R.', student: '', subject: 'Chemistry', duration: '1h 00m', status: 'pending_approval' },
+  { id: 'ps3', date: 'Apr 15', tutor: 'Priya R.', student: '', subject: 'Maths', duration: '1h 10m', status: 'pending_approval' },
+  { id: 'ps4', date: 'Apr 12', tutor: 'Priya R.', student: '', subject: 'Chemistry', duration: '0h 55m', status: 'pending_approval' },
 ];
 
 export const mockFeeHistory: FeeEntry[] = [
@@ -175,5 +175,5 @@ export const mockFeeCollection: FeeCollectionEntry[] = [
 ];
 
 // Status type union for mock data
-type SessionStatus = 'scheduled' | 'in-progress' | 'completed' | 'cancelled';
-type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+type SessionStatus = 'scheduled' | 'in_progress' | 'pending_approval' | 'approved' | 'rejected' | 'cancelled';
+type ApprovalStatus = 'pending_approval' | 'approved' | 'rejected';

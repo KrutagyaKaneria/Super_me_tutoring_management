@@ -3,7 +3,7 @@ import { CardShell } from '@/components/CardShell';
 import { DataTable } from '@/components/DataTable';
 import { StatusBadge, getStatusVariant } from '@/components/StatusBadge';
 import { PageHeader } from '@/components/PageHeader';
-import { Play, Square, Loader2, Calendar, ClipboardCheck, Timer } from 'lucide-react';
+import { Play, Square, Loader2, Timer } from 'lucide-react';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 
@@ -34,7 +34,6 @@ function LiveTimer({ startTime }: { startTime: string }) {
 export function TutorSessions() {
   const [sessions, setSessions] = useState<any[]>([]);
   const [students, setStudents] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
   // Manual Claim Form State
@@ -49,7 +48,6 @@ export function TutorSessions() {
 
   const fetchData = async () => {
     try {
-      setLoading(true);
       const [sessionsRes, studentsRes] = await Promise.all([
         api.get('/tutor/sessions'),
         api.get('/tutor/students')
@@ -61,8 +59,6 @@ export function TutorSessions() {
       })));
     } catch (error) {
       toast.error('Failed to load session data');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -118,7 +114,7 @@ export function TutorSessions() {
     <div className="space-y-6">
       <PageHeader title="My Tutoring Sessions" />
 
-      <CardShell title="Active & Upcoming Sessions" icon={<Calendar className="w-5 h-5 text-indigo-500" />}>
+    <CardShell title="Active & Upcoming Sessions">
         <DataTable headers={['Student', 'Subject', 'Scheduled', 'Progress', 'Status', 'Actions']}>
           {sessions.map((s) => (
             <tr key={s._id} className="hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0">
@@ -127,13 +123,13 @@ export function TutorSessions() {
               <td className="py-4 px-4 text-sm">
                 <div className="flex flex-col">
                   <span>{new Date(s.scheduledDate).toLocaleDateString()}</span>
-                  <span className="text-xs text-slate-400">{s.startTime} - {s.endTime}</span>
+                  <span className="text-xs text-slate-400">{s.scheduledStartTime || s.startTime} - {s.scheduledEndTime || s.endTime}</span>
                 </div>
               </td>
               <td className="py-4 px-4">
-                {s.status === 'ongoing' ? (
-                  <LiveTimer startTime={s.actualStartTime} />
-                ) : s.status === 'completed' || s.status === 'approved' ? (
+                {s.status === 'in_progress' ? (
+                  <LiveTimer startTime={s.startTime || s.actualStartTime} />
+                ) : ['pending_approval', 'approved', 'rejected'].includes(s.status) ? (
                   <span className="text-xs font-medium text-emerald-600">Logged: {s.durationInHours}h</span>
                 ) : (
                   <span className="text-xs text-slate-400 italic">Not started</span>
@@ -153,7 +149,7 @@ export function TutorSessions() {
                     <Play className="w-3.5 h-3.5 fill-current" /> Start
                   </button>
                 )}
-                {s.status === 'ongoing' && (
+                {s.status === 'in_progress' && (
                   <button
                     onClick={() => handleEndSession(s._id)}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-lg bg-rose-600 text-white hover:bg-rose-700 transition-all cursor-pointer shadow-sm shadow-rose-200"
@@ -161,7 +157,7 @@ export function TutorSessions() {
                     <Square className="w-3.5 h-3.5 fill-current" /> End
                   </button>
                 )}
-                {['completed', 'approved', 'rejected'].includes(s.status) && (
+                {['pending_approval', 'approved', 'rejected'].includes(s.status) && s.meetingLink && (
                   <a href={s.meetingLink} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 hover:underline font-medium">Re-join link</a>
                 )}
               </td>
@@ -177,7 +173,7 @@ export function TutorSessions() {
         </DataTable>
       </CardShell>
 
-      <CardShell title="Manual Attendance Claim" icon={<ClipboardCheck className="w-5 h-5 text-emerald-500" />}>
+      <CardShell title="Manual Attendance Claim">
         <form onSubmit={handleSubmitAttendance} className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Student</label>
@@ -222,7 +218,7 @@ export function TutorSessions() {
           <button
             type="submit"
             disabled={submitting}
-            className="w-full bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 transition-all disabled:opacity-50 cursor-pointer h-[38px]"
+            className="w-full bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-slate-800 transition-all disabled:opacity-50 cursor-pointer h-9.5"
           >
             {submitting ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Submit Claim'}
           </button>

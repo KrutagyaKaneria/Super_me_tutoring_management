@@ -72,16 +72,6 @@ exports.getMarks = catchAsync(async (req, res, next) => {
   );
 });
 
-exports.startSession = catchAsync(async (req, res, next) => {
-  const session = await sessionService.startSession(req.params.id);
-  res.status(200).json(new ApiResponse(200, { session }, 'Session started successfully'));
-});
-
-exports.endSession = catchAsync(async (req, res, next) => {
-  const session = await sessionService.endSession(req.params.id);
-  res.status(200).json(new ApiResponse(200, { session }, 'Session ended and pending approval'));
-});
-
 exports.submitAttendance = catchAsync(async (req, res, next) => {
   const sessionService = require('../services/session.service');
   const session = await sessionService.submitManualSession(req.user.id, req.body);

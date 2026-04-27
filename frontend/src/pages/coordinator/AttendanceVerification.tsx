@@ -19,8 +19,8 @@ export function AttendanceVerification() {
           tutor: c.tutorId?.name || 'Unknown Tutor',
           student: c.studentId?.name || 'Unknown Student',
           date: new Date(c.scheduledDate).toLocaleDateString(),
-          startTime: c.actualStartTime ? new Date(c.actualStartTime).toLocaleTimeString() : 'N/A',
-          endTime: c.actualEndTime ? new Date(c.actualEndTime).toLocaleTimeString() : 'N/A',
+          startTime: (c.startTime || c.actualStartTime) ? new Date(c.startTime || c.actualStartTime).toLocaleTimeString() : 'N/A',
+          endTime: (c.endTime || c.actualEndTime) ? new Date(c.endTime || c.actualEndTime).toLocaleTimeString() : 'N/A',
           claimedDuration: `${c.durationInHours || 0} hours`,
           status: c.status
         }));

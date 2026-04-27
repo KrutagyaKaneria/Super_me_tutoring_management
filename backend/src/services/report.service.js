@@ -72,7 +72,7 @@ exports.getParentConsolidatedReport = async (parentUserId) => {
 exports.getAdminPlatformReports = async () => {
   // Broad analytical aggregation
   const totalSessions = await Session.countDocuments();
-  const pendingApprovals = await Session.countDocuments({ status: 'completed' });
+  const pendingApprovals = await Session.countDocuments({ status: 'pending_approval' });
   const totalExamsLogged = await Exam.countDocuments();
 
   return {

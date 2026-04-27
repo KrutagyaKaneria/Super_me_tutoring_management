@@ -10,8 +10,8 @@ const parentDashboardService = require('./parent.dashboard.service');
 exports.getAdminDashboard = async () => {
   const totalUsers = await User.countDocuments();
   const totalSessions = await Session.countDocuments();
-  const activeSessions = await Session.countDocuments({ status: 'pending' });
-  const pendingApprovals = await Session.countDocuments({ status: 'completed' });
+  const activeSessions = await Session.countDocuments({ status: 'in_progress' });
+  const pendingApprovals = await Session.countDocuments({ status: 'pending_approval' });
   
   const students = await Student.find();
   const totalRevenue = students.reduce((acc, s) => acc + (s.totalFeesPaid || 0), 0);
@@ -28,7 +28,7 @@ exports.getAdminDashboard = async () => {
 exports.getCoordinatorDashboard = async () => {
   const totalTutors = await Tutor.countDocuments();
   const totalStudents = await Student.countDocuments();
-  const pendingAttendances = await Session.countDocuments({ status: 'completed' });
+  const pendingAttendances = await Session.countDocuments({ status: 'pending_approval' });
   const recentSessions = await Session.find().sort({ createdAt: -1 }).limit(5).populate('tutorId studentId', 'name');
   
   // Get assignments (Students with their assigned tutors)
@@ -67,13 +67,13 @@ exports.getTutorDashboard = async (tutorUserId) => {
   const monthlySessions = await Session.countDocuments({
     tutorId: tutorUserId,
     scheduledDate: { $gte: firstDayOfMonth },
-    status: { $in: ['completed', 'approved'] }
+    status: { $in: ['pending_approval', 'approved'] }
   });
 
   // 3. Pending approvals (completed but not approved)
   const pendingApprovals = await Session.countDocuments({
     tutorId: tutorUserId,
-    status: 'completed'
+    status: 'pending_approval'
   });
 
   // 4. Monthly earnings (Sum of approved sessions in current month)
@@ -120,17 +120,17 @@ exports.getStudentDashboard = async (studentUserId) => {
   
   const sessionsCompleted = await Session.countDocuments({
     studentId: studentUserId,
-    status: { $in: ['completed', 'approved'] }
+    status: { $in: ['pending_approval', 'approved'] }
   });
 
   const completedSessions = await Session.find({
     studentId: studentUserId,
-    status: { $in: ['completed', 'approved'] }
+    status: { $in: ['pending_approval', 'approved'] }
   });
   const hoursCompleted = completedSessions.reduce((acc, s) => acc + (s.durationInHours || 0), 0);
 
   const upcomingSessions = await Session.find({ studentId: studentUserId, status: 'scheduled' })
-    .sort({ scheduledDate: 1, startTime: 1 })
+    .sort({ scheduledDate: 1, scheduledStartTime: 1 })
     .limit(5)
     .populate('tutorId', 'name');
 
@@ -181,14 +181,14 @@ exports.getParentDashboard = async (parentUserId) => {
   const sessionsCompleted = studentUserIds.length
     ? await Session.countDocuments({
         studentId: { $in: studentUserIds },
-        status: { $in: ['completed', 'approved'] }
+        status: { $in: ['pending_approval', 'approved'] }
       })
     : 0;
 
   const allCompletedSessions = studentUserIds.length
     ? await Session.find({
         studentId: { $in: studentUserIds },
-        status: { $in: ['completed', 'approved'] }
+        status: { $in: ['pending_approval', 'approved'] }
       }).populate('studentId', 'name')
     : [];
 
@@ -222,7 +222,7 @@ exports.getParentDashboard = async (parentUserId) => {
       date: s.scheduledDate,
       studentName: s.studentId?.name || 'Child',
       description: `Tutoring Session: ${s.subject}`,
-      amount: (s.durationInHours || 0) * 250,
+      amount: typeof s.amount === 'number' ? s.amount : (s.durationInHours || 0) * (s.hourlyRate || 0),
     }));
 
   return {

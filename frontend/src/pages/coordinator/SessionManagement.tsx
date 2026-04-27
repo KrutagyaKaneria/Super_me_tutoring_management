@@ -82,7 +82,7 @@ export function SessionManagement() {
   };
 
   const upcomingSessions = sessions.filter(s => s.status === 'scheduled');
-  const completedSessions = sessions.filter(s => ['completed', 'approved', 'rejected'].includes(s.status));
+  const completedSessions = sessions.filter(s => ['pending_approval', 'approved', 'rejected'].includes(s.status));
 
   return (
     <div className="space-y-6">
@@ -107,7 +107,7 @@ export function SessionManagement() {
                 <td className="py-3 px-3 text-sm">
                   <div className="flex flex-col">
                     <span className="font-medium text-slate-900">{new Date(s.scheduledDate).toLocaleDateString()}</span>
-                    <span className="text-xs text-slate-500">{s.startTime} - {s.endTime}</span>
+                    <span className="text-xs text-slate-500">{s.scheduledStartTime || s.startTime} - {s.scheduledEndTime || s.endTime}</span>
                   </div>
                 </td>
                 <td className="py-3 px-3 text-sm font-medium text-slate-700">{s.tutorId?.name || 'N/A'}</td>

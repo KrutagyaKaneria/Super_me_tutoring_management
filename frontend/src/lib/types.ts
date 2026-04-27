@@ -1,7 +1,7 @@
 export type Role = 'admin' | 'coordinator' | 'tutor' | 'student' | 'parent';
 
-export type SessionStatus = 'scheduled' | 'in-progress' | 'completed' | 'cancelled';
-export type ApprovalStatus = 'pending' | 'approved' | 'rejected';
+export type SessionStatus = 'scheduled' | 'in_progress' | 'pending_approval' | 'approved' | 'rejected' | 'cancelled';
+export type ApprovalStatus = 'pending_approval' | 'approved' | 'rejected';
 export type UserStatus = 'active' | 'inactive' | 'on-hold';
 export type PaymentStatus = 'paid' | 'pending' | 'overdue';
 export type BadgeVariant = 'green' | 'amber' | 'blue' | 'red' | 'gray' | 'purple';

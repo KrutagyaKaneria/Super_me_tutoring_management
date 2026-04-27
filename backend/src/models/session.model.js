@@ -31,19 +31,45 @@ const sessionSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['scheduled', 'pending', 'completed', 'cancelled', 'approved', 'rejected'],
+      // NOTE: Legacy values ('pending'/'completed'/'ongoing') are retained to avoid breaking
+      // existing data. New workflow MUST use: scheduled -> in_progress -> pending_approval -> approved/rejected
+      enum: [
+        'scheduled',
+        'in_progress',
+        'pending_approval',
+        'approved',
+        'rejected',
+        'cancelled',
+        // legacy
+        'pending',
+        'completed',
+        'ongoing',
+      ],
       default: 'scheduled',
     },
-    startTime: {
-      type: String, // scheduled time e.g. "10:00"
+    // Scheduled time window
+    scheduledStartTime: {
+      type: String, // e.g. "10:00"
       required: true,
     },
-    actualStartTime: {
-      type: Date,
+    scheduledEndTime: {
+      type: String, // e.g. "11:00"
+      required: true,
+    },
+
+    // Actual timestamps (tutor attendance)
+    // Mixed is used to preserve compatibility with any legacy data where startTime/endTime
+    // might have been stored as strings.
+    startTime: {
+      type: mongoose.Schema.Types.Mixed,
     },
     endTime: {
-      type: String, // scheduled time e.g. "11:00"
-      required: true,
+      type: mongoose.Schema.Types.Mixed,
+    },
+
+    // Legacy fields (kept for backward compatibility; not used by new workflow)
+    actualStartTime: {
+      type: Date,
     },
     actualEndTime: {
       type: Date,
@@ -51,6 +77,18 @@ const sessionSchema = new mongoose.Schema(
     durationInHours: {
       type: Number,
       required: true,
+      default: 0,
+    },
+    // Finance automation (applies only on approval)
+    financialsApplied: {
+      type: Boolean,
+      default: false,
+    },
+    hourlyRate: {
+      type: Number,
+    },
+    amount: {
+      type: Number,
     },
     tutorNotes: {
       type: String,

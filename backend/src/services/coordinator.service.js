@@ -4,6 +4,7 @@ const Parent = require('../models/parent.model');
 const User = require('../models/user.model');
 const Session = require('../models/session.model');
 const AppError = require('../utils/AppError');
+const mongoose = require('mongoose');
 
 exports.getAllTutors = async () => {
   // 1. Find all users with role 'tutor'
@@ -87,58 +88,78 @@ exports.assignTutorToStudent = async (studentUserId, tutorUserId) => {
 const FeeConfig = require('../models/feeConfig.model');
 
 exports.getPendingAttendance = async () => {
-  // 'completed' sessions are awaiting coordinator approval
-  return await Session.find({ status: 'completed' })
+  return await Session.find({ status: 'pending_approval' })
     .populate('tutorId', 'name email')
     .populate('studentId', 'name email');
 };
 
 exports.approveSession = async (sessionId) => {
-  const session = await Session.findById(sessionId);
-  if (!session) throw new AppError('Session not found', 404);
+  const tx = await mongoose.startSession();
+  tx.startTransaction();
+  try {
+    const session = await Session.findById(sessionId).session(tx);
+    if (!session) throw new AppError('Session not found', 404);
 
-  // Prevent duplicate approval
-  if (session.status === 'approved') {
-    throw new AppError('This session has already been approved financially.', 400);
+    if (session.status === 'approved' || session.financialsApplied) {
+      throw new AppError('This session has already been approved financially.', 400);
+    }
+
+    if (session.status !== 'pending_approval') {
+      throw new AppError(`Cannot approve a session with status: ${session.status}`, 400);
+    }
+
+    const student = await Student.findOne({ user: session.studentId }).session(tx);
+    const tutor = await Tutor.findOne({ user: session.tutorId }).session(tx);
+    if (!student || !tutor) throw new AppError('Associated profile mapping missing', 404);
+
+    const gradeNumeric = parseInt(student.grade, 10);
+    if (isNaN(gradeNumeric)) {
+      throw new AppError('Student grade is not explicitly formatted as a number. Cannot determine hourly rate.', 400);
+    }
+
+    const feeConfig = await FeeConfig.findOne({
+      gradeMin: { $lte: gradeNumeric },
+      gradeMax: { $gte: gradeNumeric }
+    }).session(tx);
+
+    if (!feeConfig) {
+      throw new AppError(`No FeeConfig explicitly mapped for Grade ${gradeNumeric}.`, 404);
+    }
+
+    const hourlyRate = feeConfig.hourlyRate;
+    const amount = Number(((session.durationInHours || 0) * hourlyRate).toFixed(2));
+
+    const updatedSession = await Session.findOneAndUpdate(
+      { _id: sessionId, status: 'pending_approval', financialsApplied: false },
+      {
+        $set: {
+          status: 'approved',
+          financialsApplied: true,
+          hourlyRate,
+          amount,
+        }
+      },
+      { new: true, session: tx }
+    );
+
+    if (!updatedSession) {
+      throw new AppError('Session approval could not be applied (already processed).', 400);
+    }
+
+    tutor.totalEarnings += amount;
+    student.pendingFees += amount;
+
+    await tutor.save({ session: tx });
+    await student.save({ session: tx });
+
+    await tx.commitTransaction();
+    return updatedSession;
+  } catch (err) {
+    await tx.abortTransaction();
+    throw err;
+  } finally {
+    tx.endSession();
   }
-
-  // Must be completed first
-  if (session.status !== 'completed') {
-    throw new AppError(`Cannot approve a session with status: ${session.status}`, 400);
-  }
-
-  const student = await Student.findOne({ user: session.studentId });
-  const tutor = await Tutor.findOne({ user: session.tutorId });
-
-  if (!student || !tutor) throw new AppError('Associated profile mapping missing', 404);
-
-  const gradeNumeric = parseInt(student.grade, 10);
-  if (isNaN(gradeNumeric)) {
-    throw new AppError('Student grade is not explicitly formatted as a number. Cannot determine hourly rate.', 400);
-  }
-
-  // Find fee config boundary
-  const feeConfig = await FeeConfig.findOne({
-    gradeMin: { $lte: gradeNumeric },
-    gradeMax: { $gte: gradeNumeric }
-  });
-
-  if (!feeConfig) {
-    throw new AppError(`No FeeConfig explicitly mapped for Grade ${gradeNumeric}.`, 404);
-  }
-
-  const amount = session.durationInHours * feeConfig.hourlyRate;
-
-  // Atomically update metrics (ensure logic runs exclusively once)
-  tutor.totalEarnings += amount;
-  student.pendingFees += amount;
-  session.status = 'approved';
-
-  await tutor.save();
-  await student.save();
-  await session.save();
-
-  return session;
 };
 
 exports.rejectSession = async (sessionId) => {
@@ -147,6 +168,10 @@ exports.rejectSession = async (sessionId) => {
 
   if (session.status === 'approved' || session.status === 'rejected') {
      throw new AppError('Session is already processed.', 400);
+  }
+
+  if (session.status !== 'pending_approval') {
+    throw new AppError(`Cannot reject a session with status: ${session.status}`, 400);
   }
 
   session.status = 'rejected';

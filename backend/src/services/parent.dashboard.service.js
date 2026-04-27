@@ -43,7 +43,7 @@ exports.getChildProgress = async (parentUserId) => {
 
   const attendanceSummary = {
     totalScheduled: sessions.filter(s => s.status === 'scheduled').length,
-    totalCompletedOrApproved: sessions.filter(s => s.status === 'completed' || s.status === 'approved').length,
+    totalCompletedOrApproved: sessions.filter(s => s.status === 'pending_approval' || s.status === 'approved').length,
     totalCancelled: sessions.filter(s => s.status === 'cancelled').length,
   };
 

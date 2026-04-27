@@ -46,8 +46,11 @@ exports.scheduleSession = async (coordinatorId, data) => {
   });
 
   const hasOverlap = existingSessions.some(s => {
+    const scheduledStart = s.scheduledStartTime || s.startTime;
+    const scheduledEnd = s.scheduledEndTime || s.endTime;
+    if (typeof scheduledStart !== 'string' || typeof scheduledEnd !== 'string') return false;
     // Overlap logic: (StartA < EndB) and (EndA > StartB)
-    return (startTime < s.endTime) && (endTime > s.startTime);
+    return (startTime < scheduledEnd) && (endTime > scheduledStart);
   });
 
   if (hasOverlap) {
@@ -72,9 +75,10 @@ exports.scheduleSession = async (coordinatorId, data) => {
     coordinatorId,
     subject,
     scheduledDate: new Date(scheduledDate),
-    startTime,
-    endTime,
-    durationInHours: Number(durationInHours.toFixed(2)),
+    scheduledStartTime: startTime,
+    scheduledEndTime: endTime,
+    // Actual duration is calculated on tutor end-session.
+    durationInHours: 0,
     meetingLink,
     status: 'scheduled'
   });
@@ -85,45 +89,6 @@ exports.scheduleSession = async (coordinatorId, data) => {
 exports.getTutorSessions = async (tutorUserId) => {
   // Return sessions mapped securely to standard profiles
   return await Session.find({ tutorId: tutorUserId }).populate('studentId', 'name email').sort({ scheduledDate: 1 });
-};
-
-exports.startSession = async (sessionId) => {
-  const session = await Session.findById(sessionId);
-  if (!session) throw new AppError('Session not found', 404);
-  if (session.status !== 'scheduled') throw new AppError('Only scheduled sessions can be started', 400);
-
-  // Safety: Prevent multiple ongoing sessions for the same tutor
-  const ongoing = await Session.findOne({ tutorId: session.tutorId, status: 'ongoing' });
-  if (ongoing) {
-    throw new AppError('You already have an ongoing session. Please end it before starting a new one.', 400);
-  }
-
-  session.status = 'ongoing';
-  session.actualStartTime = new Date();
-  await session.save();
-
-  return session;
-};
-
-exports.endSession = async (sessionId) => {
-  const session = await Session.findById(sessionId);
-  if (!session) throw new AppError('Session not found', 404);
-  if (session.status !== 'ongoing') throw new AppError('Session must be ongoing to end it', 400);
-
-  session.status = 'completed';
-  session.actualEndTime = new Date();
-  
-  // Calculate duration in hours
-  const start = new Date(session.actualStartTime);
-  const end = new Date(session.actualEndTime);
-  const durationInHours = (end - start) / (1000 * 60 * 60);
-  
-  // Limit to 5 hours max as per safety rule
-  session.durationInHours = Math.min(Number(durationInHours.toFixed(2)), 5);
-  
-  await session.save();
-
-  return session;
 };
 
 exports.getStudentSchedule = async (studentUserId) => {
@@ -142,16 +107,23 @@ exports.startSession = async (tutorUserId, sessionId) => {
     throw new AppError('You are not authorized to manage this session.', 403);
   }
 
-  // Prevent multiple starts or starting completed schedules
-  if (session.status === 'pending') {
-    throw new AppError('This session has already been started.', 400);
-  }
-  if (session.status === 'completed' || session.status === 'cancelled') {
-    throw new AppError(`Cannot start a ${session.status} session.`, 400);
+  // Only scheduled sessions can be started
+  if (session.status !== 'scheduled') {
+    throw new AppError('Cannot start a non-scheduled session.', 400);
   }
 
-  session.actualStartTime = new Date();
-  session.status = 'pending';
+  // Prevent multiple in-progress sessions for the same tutor
+  const inProgress = await Session.findOne({
+    tutorId: session.tutorId,
+    status: { $in: ['in_progress', 'ongoing', 'pending'] },
+  });
+  if (inProgress) {
+    throw new AppError('You already have an in-progress session. Please end it before starting a new one.', 400);
+  }
+
+  // Save actual start timestamp
+  session.startTime = new Date();
+  session.status = 'in_progress';
   await session.save();
 
   return session;
@@ -168,25 +140,38 @@ exports.endSession = async (tutorUserId, sessionId) => {
     throw new AppError('You are not authorized to manage this session.', 403);
   }
 
-  // Prevent end before start
-  if (session.status !== 'pending' || !session.actualStartTime) {
+  // Prevent end before start / invalid status
+  if (!['in_progress', 'ongoing', 'pending'].includes(session.status)) {
+    throw new AppError('Cannot end a session that is not in progress.', 400);
+  }
+  if (!session.startTime) {
     throw new AppError('You must start the session before attempting to end it.', 400);
   }
+  if (session.endTime) {
+    throw new AppError('This session has already been ended.', 400);
+  }
 
-  session.actualEndTime = new Date();
-  
+  session.endTime = new Date();
+
+  const start = new Date(session.startTime);
+  const end = new Date(session.endTime);
+
   // Calculate duration in hours
-  const diffInMs = session.actualEndTime - session.actualStartTime;
+  const diffInMs = end.getTime() - start.getTime();
   const durationInHours = diffInMs / (1000 * 60 * 60);
+
+  if (durationInHours <= 0) {
+    throw new AppError('End time must be after start time', 400);
+  }
 
   // Prevent excessive duration (>3 hours)
   if (durationInHours > 3) {
     throw new AppError('Session exceeded maximum permitted duration of 3 hours. Manual supervisor override required.', 400);
   }
 
-  // Override the scheduled duration with actual duration
+  // Save actual duration
   session.durationInHours = Number(durationInHours.toFixed(2));
-  session.status = 'completed';
+  session.status = 'pending_approval';
   await session.save();
 
   return session;
@@ -209,8 +194,8 @@ exports.submitManualSession = async (tutorUserId, data) => {
 
   const durationInHours = (end - start) / (1000 * 60 * 60);
 
-  if (durationInHours > 5) {
-    throw new AppError('Session exceeded maximum permitted duration of 5 hours.', 400);
+  if (durationInHours > 3) {
+    throw new AppError('Session exceeded maximum permitted duration of 3 hours.', 400);
   }
 
   // Find a coordinator to assign this manual log to (usually the system or first admin/coordinator)
@@ -224,12 +209,12 @@ exports.submitManualSession = async (tutorUserId, data) => {
     coordinatorId: coordinator._id,
     subject: 'Manual Log',
     scheduledDate: new Date(date),
-    startTime,
-    endTime,
-    actualStartTime: start,
-    actualEndTime: end,
+    scheduledStartTime: startTime,
+    scheduledEndTime: endTime,
+    startTime: start,
+    endTime: end,
     durationInHours: Number(durationInHours.toFixed(2)),
-    status: 'completed'
+    status: 'pending_approval'
   });
 
   return newSession;

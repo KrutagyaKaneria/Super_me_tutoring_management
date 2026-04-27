@@ -52,7 +52,7 @@ export function AttendanceCard({ claim }: AttendanceCardProps) {
       <p className="text-sm mt-2">
         Claimed duration: <strong>{claim.claimedDuration}</strong>
       </p>
-      {status === 'pending' && (
+      {status === 'pending_approval' && (
         <div className="flex items-center gap-2 mt-3">
           <button
             onClick={handleApprove}
