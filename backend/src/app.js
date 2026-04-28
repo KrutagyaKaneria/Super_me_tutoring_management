@@ -8,6 +8,7 @@ const config = require('./config/env');
 const authRoutes = require('./routes/auth.routes');
 const adminUserRoutes = require('./routes/admin.user.routes');
 const adminFeeRoutes = require('./routes/admin.fee.routes');
+const assignmentPricingRoutes = require('./routes/assignmentPricing.routes');
 const adminReportRoutes = require('./routes/admin.report.routes');
 const adminDashboardRoutes = require('./routes/admin.dashboard.routes');
 const tutorRoutes = require('./routes/tutor.routes');
@@ -35,10 +36,12 @@ app.get('/api/health', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/admin/users', adminUserRoutes);
 app.use('/api/admin/fee-config', adminFeeRoutes);
+app.use('/api/admin/assignment-pricing', assignmentPricingRoutes);
 app.use('/api/admin/reports', adminReportRoutes);
 app.use('/api/admin/dashboard', adminDashboardRoutes);
 app.use('/api/tutor', tutorRoutes);
 app.use('/api/coordinator', coordinatorRoutes);
+app.use('/api/coordinator/assignment-pricing', assignmentPricingRoutes);
 app.use('/api/student', studentRoutes);
 app.use('/api/parent', parentRoutes);
 

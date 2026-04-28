@@ -42,6 +42,7 @@ export const NAV_CONFIG: Record<Role, NavItem[]> = {
     { id: 'dash', label: 'Dashboard', icon: 'LayoutGrid', path: '' },
     { id: 'users', label: 'Users', icon: 'Users', path: 'users' },
     { id: 'fees', label: 'Fee Config', icon: 'DollarSign', path: 'fees' },
+    { id: 'pricing', label: 'Custom Pricing', icon: 'DollarSign', path: 'pricing' },
     { id: 'reports', label: 'Reports', icon: 'FileText', path: 'reports' },
   ],
 };

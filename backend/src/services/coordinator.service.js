@@ -5,6 +5,7 @@ const User = require('../models/user.model');
 const Session = require('../models/session.model');
 const AppError = require('../utils/AppError');
 const mongoose = require('mongoose');
+const AssignmentPricing = require('../models/assignmentPricing.model');
 
 exports.getAllTutors = async () => {
   // 1. Find all users with role 'tutor'
@@ -87,6 +88,86 @@ exports.assignTutorToStudent = async (studentUserId, tutorUserId) => {
 // PHASE 7 Additions
 const FeeConfig = require('../models/feeConfig.model');
 
+function normalizeOptionalSubject(subject) {
+  return typeof subject === 'string' ? subject.trim() : '';
+}
+
+function toPositiveNumberOrNull(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
+exports.upsertAssignmentPricing = async (data) => {
+  const {
+    tutorId,
+    studentId,
+    subject,
+    billingRatePerHour,
+    tutorPayoutPerHour,
+    board,
+    grade,
+    customNotes,
+    isActive,
+  } = data || {};
+
+  if (!tutorId || !studentId) {
+    throw new AppError('tutorId and studentId are required', 400);
+  }
+
+  const [tutorUser, studentUser] = await Promise.all([
+    User.findById(tutorId).select('role isActive'),
+    User.findById(studentId).select('role isActive'),
+  ]);
+
+  if (!tutorUser || tutorUser.role !== 'tutor') {
+    throw new AppError('Valid tutor user not found', 404);
+  }
+  if (!studentUser || studentUser.role !== 'student') {
+    throw new AppError('Valid student user not found', 404);
+  }
+
+  const normalizedSubject = normalizeOptionalSubject(subject);
+
+  const update = {
+    subject: normalizedSubject,
+    board,
+    grade,
+    customNotes,
+    isActive: typeof isActive === 'boolean' ? isActive : true,
+  };
+
+  const billing = toPositiveNumberOrNull(billingRatePerHour);
+  const payout = toPositiveNumberOrNull(tutorPayoutPerHour);
+  if (billing !== null) update.billingRatePerHour = billing;
+  if (payout !== null) update.tutorPayoutPerHour = payout;
+
+  const pricing = await AssignmentPricing.findOneAndUpdate(
+    { tutorId, studentId, subject: normalizedSubject },
+    { $set: update, $setOnInsert: { tutorId, studentId } },
+    { new: true, upsert: true, runValidators: true }
+  );
+
+  return pricing;
+};
+
+exports.getAssignmentPricing = async (tutorId, studentId, subject) => {
+  if (!tutorId || !studentId) {
+    throw new AppError('tutorId and studentId are required', 400);
+  }
+
+  const normalizedSubject = normalizeOptionalSubject(subject);
+
+  // 1) Subject-specific pricing (if provided)
+  if (normalizedSubject) {
+    const subjectSpecific = await AssignmentPricing.findOne({ tutorId, studentId, subject: normalizedSubject, isActive: true });
+    if (subjectSpecific) return subjectSpecific;
+  }
+
+  // 2) All-subject pricing
+  return await AssignmentPricing.findOne({ tutorId, studentId, subject: '', isActive: true });
+};
+
 exports.getPendingAttendance = async () => {
   return await Session.find({ status: 'pending_approval' })
     .populate('tutorId', 'name email')
@@ -112,22 +193,57 @@ exports.approveSession = async (sessionId) => {
     const tutor = await Tutor.findOne({ user: session.tutorId }).session(tx);
     if (!student || !tutor) throw new AppError('Associated profile mapping missing', 404);
 
-    const gradeNumeric = parseInt(student.grade, 10);
-    if (isNaN(gradeNumeric)) {
-      throw new AppError('Student grade is not explicitly formatted as a number. Cannot determine hourly rate.', 400);
+    const duration = Number(session.durationInHours || 0);
+    if (!Number.isFinite(duration) || duration <= 0) {
+      throw new AppError('Session duration is invalid. Cannot approve financials.', 400);
     }
 
-    const feeConfig = await FeeConfig.findOne({
-      gradeMin: { $lte: gradeNumeric },
-      gradeMax: { $gte: gradeNumeric }
-    }).session(tx);
+    // Pricing priority:
+    // 1) Assignment-level custom pricing
+    // 2) FeeConfig grade-based fallback (backward compatible)
+    const normalizedSessionSubject = normalizeOptionalSubject(session.subject);
 
-    if (!feeConfig) {
-      throw new AppError(`No FeeConfig explicitly mapped for Grade ${gradeNumeric}.`, 404);
+    const assignmentPricing = await (async () => {
+      // subject-specific first, then all-subject (""), both active
+      const subjectSpecific = normalizedSessionSubject
+        ? await AssignmentPricing.findOne({ tutorId: session.tutorId, studentId: session.studentId, subject: normalizedSessionSubject, isActive: true }).session(tx)
+        : null;
+      if (subjectSpecific) return subjectSpecific;
+      return await AssignmentPricing.findOne({ tutorId: session.tutorId, studentId: session.studentId, subject: '', isActive: true }).session(tx);
+    })();
+
+    const assignmentBilling = assignmentPricing ? toPositiveNumberOrNull(assignmentPricing.billingRatePerHour) : null;
+    const assignmentPayout = assignmentPricing ? toPositiveNumberOrNull(assignmentPricing.tutorPayoutPerHour) : null;
+
+    // FeeConfig is now an optional fallback.
+    // If you configure custom pricing for each tutor–student, you do NOT need FeeConfig.
+    let fallbackRate = null;
+    if (assignmentBilling === null || assignmentPayout === null) {
+      const gradeNumeric = parseInt(student.grade, 10);
+      if (Number.isFinite(gradeNumeric)) {
+        const feeConfig = await FeeConfig.findOne({
+          gradeMin: { $lte: gradeNumeric },
+          gradeMax: { $gte: gradeNumeric },
+        }).session(tx);
+        const maybe = feeConfig ? Number(feeConfig.hourlyRate) : null;
+        fallbackRate = Number.isFinite(maybe) && maybe > 0 ? maybe : null;
+      }
     }
 
-    const hourlyRate = feeConfig.hourlyRate;
-    const amount = Number(((session.durationInHours || 0) * hourlyRate).toFixed(2));
+    // If FeeConfig isn't present, we fall back to the other custom rate (so providing only 1 rate still works).
+    const billingRatePerHour = assignmentBilling ?? fallbackRate ?? assignmentPayout;
+    const tutorPayoutPerHour = assignmentPayout ?? fallbackRate ?? assignmentBilling;
+
+    if (!Number.isFinite(billingRatePerHour) || billingRatePerHour <= 0) {
+      throw new AppError('No valid billing rate found. Configure custom pricing (billingRatePerHour) or FeeConfig.', 400);
+    }
+    if (!Number.isFinite(tutorPayoutPerHour) || tutorPayoutPerHour <= 0) {
+      throw new AppError('No valid tutor payout rate found. Configure custom pricing (tutorPayoutPerHour) or FeeConfig.', 400);
+    }
+
+    const billedAmount = Number((duration * billingRatePerHour).toFixed(2));
+    const tutorAmount = Number((duration * tutorPayoutPerHour).toFixed(2));
+    const platformMargin = Number((billedAmount - tutorAmount).toFixed(2));
 
     const updatedSession = await Session.findOneAndUpdate(
       { _id: sessionId, status: 'pending_approval', financialsApplied: false },
@@ -135,8 +251,14 @@ exports.approveSession = async (sessionId) => {
         $set: {
           status: 'approved',
           financialsApplied: true,
-          hourlyRate,
-          amount,
+          // Backward compatibility: keep these as the billed (student) rate/amount
+          hourlyRate: billingRatePerHour,
+          amount: billedAmount,
+
+          billingRatePerHour,
+          tutorPayoutPerHour,
+          tutorAmount,
+          platformMargin,
         }
       },
       { new: true, session: tx }
@@ -146,8 +268,8 @@ exports.approveSession = async (sessionId) => {
       throw new AppError('Session approval could not be applied (already processed).', 400);
     }
 
-    tutor.totalEarnings += amount;
-    student.pendingFees += amount;
+    tutor.totalEarnings += tutorAmount;
+    student.pendingFees += billedAmount;
 
     await tutor.save({ session: tx });
     await student.save({ session: tx });

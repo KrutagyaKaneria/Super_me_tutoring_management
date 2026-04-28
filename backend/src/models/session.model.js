@@ -90,6 +90,19 @@ const sessionSchema = new mongoose.Schema(
     amount: {
       type: Number,
     },
+    // Advanced pricing (stored at approval time for historical accuracy)
+    billingRatePerHour: {
+      type: Number,
+    },
+    tutorPayoutPerHour: {
+      type: Number,
+    },
+    tutorAmount: {
+      type: Number,
+    },
+    platformMargin: {
+      type: Number,
+    },
     tutorNotes: {
       type: String,
       trim: true,

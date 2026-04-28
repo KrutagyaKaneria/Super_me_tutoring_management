@@ -80,3 +80,11 @@ exports.submitAttendance = catchAsync(async (req, res, next) => {
     new ApiResponse(201, { session }, 'Attendance submitted for approval')
   );
 });
+
+exports.getEarnings = catchAsync(async (req, res, next) => {
+  const data = await tutorService.getTutorEarnings(req.user.id);
+
+  res.status(200).json(
+    new ApiResponse(200, data, 'Tutor earnings retrieved successfully')
+  );
+});

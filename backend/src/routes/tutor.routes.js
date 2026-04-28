@@ -10,6 +10,7 @@ router.use(authMiddleware.protect);
 router.use(roleMiddleware.restrictTo('tutor'));
 
 router.get('/dashboard', tutorController.getDashboard);
+router.get('/earnings', tutorController.getEarnings);
 router.patch('/profile', tutorController.updateProfile);
 router.get('/students', tutorController.getAllStudents);
 router.get('/sessions', tutorController.getTutorSessions);

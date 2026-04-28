@@ -36,6 +36,7 @@ import { AdminDashboard } from '@/pages/admin/AdminDashboard';
 import { UserManagement } from '@/pages/admin/UserManagement';
 import { FeeConfig } from '@/pages/admin/FeeConfig';
 import { AdminReports } from '@/pages/admin/AdminReports';
+import { AdminCustomPricing } from '@/pages/admin/AdminCustomPricing';
 
 // Auth
 import { Login } from '@/pages/Login';
@@ -83,6 +84,7 @@ function App() {
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/users" element={<UserManagement />} />
             <Route path="/admin/fees" element={<FeeConfig />} />
+            <Route path="/admin/pricing" element={<AdminCustomPricing />} />
             <Route path="/admin/reports" element={<AdminReports />} />
 
             {/* Default redirect */}
